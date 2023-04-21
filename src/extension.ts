@@ -20,13 +20,18 @@ interface TreeNode {
 }
 
 const OPEN_FILE_COMMAND = 'extension.openFile';
-
+const compileCommandsPath = "compile_commands.json";
 class CompileCommandsTreeDataProvider implements vscode.TreeDataProvider<TreeNode> {
 	private fileTree: TreeNode[] = [];
+
 	private rootPath: string | undefined;
+	private disposable: vscode.Disposable | undefined;
+	private compileCommandsPath: string | undefined;
+
+	private _onDidChangeTreeData: vscode.EventEmitter<TreeNode | undefined> = new vscode.EventEmitter<TreeNode | undefined>();
+	readonly onDidChangeTreeData: vscode.Event<TreeNode | undefined> = this._onDidChangeTreeData.event;
+
 	constructor() {
-		// const files = vscode.workspace.findFiles('**/compile_commands.json');
-		let compileCommandsPath = "build/compile_commands.json";
 		this.rootPath = (vscode.workspace.workspaceFolders && (vscode.workspace.workspaceFolders.length > 0)) ?
 			vscode.workspace.workspaceFolders[0].uri.fsPath : undefined;
 
@@ -40,19 +45,30 @@ class CompileCommandsTreeDataProvider implements vscode.TreeDataProvider<TreeNod
 		if (!this.rootPath) {
 			return;
 		}
+		this.refresh();
 
-		var dbPath = path.join(this.rootPath, compileCommandsPath);
+		this.watchCompileCommandsJson();
+	}
+
+	dispose() {
+		this.disposable?.dispose();
+	}
+
+	private refresh() {
+		this.fileTree = [];
+		var dbPath = path.join(this.rootPath ?? "", compileCommandsPath);
 		if (!this._pathExists(dbPath)) {
-			dbPath = path.join(this.rootPath, "build", compileCommandsPath);
+			dbPath = path.join(this.rootPath ?? "", "build", compileCommandsPath);
 			if (!this._pathExists(dbPath)) {
 				return;
 			}
 		}
+		this.compileCommandsPath = dbPath;
 
 		const fileContent = fs.readFileSync(dbPath, 'utf-8');
 		const compileCommands: Command[] = JSON.parse(fileContent);
 
-		var projectPath = path.parse(this.rootPath);
+		var projectPath = path.parse(this.rootPath ?? "");
 
 		compileCommands.forEach((command) => {
 			var filePath = command.file;
@@ -66,6 +82,18 @@ class CompileCommandsTreeDataProvider implements vscode.TreeDataProvider<TreeNod
 			this.createDirectory(this.fileTree, r.dir.split(path.sep), r.base, filePath, command);
 		});
 
+		this._onDidChangeTreeData.fire(undefined);
+	}
+
+	private watchCompileCommandsJson() {
+		// 监听 compile_commands.json 文件的变化
+		const watcher = vscode.workspace.createFileSystemWatcher(this.compileCommandsPath ?? "");
+		this.disposable = vscode.Disposable.from(watcher);
+
+		watcher.onDidChange(() => {
+			console.log('compile_commands.json has changed. Refreshing the tree...');
+			this.refresh();
+		});
 	}
 
 	private createDirectory(nodes: TreeNode[], directories: string[], fileName: string, filePath: string, command: Command) {
@@ -131,16 +159,34 @@ class CompileCommandsTreeDataProvider implements vscode.TreeDataProvider<TreeNod
 		} else {
 			return {
 				label: element.name,
-				collapsibleState: element.children ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None,
+				collapsibleState: element.children ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
 				iconPath: new vscode.ThemeIcon('folder')
 			};
 		}
+	}
+
+	public collapseAll(): void {
+		this._onDidChangeTreeData.fire(undefined);
 	}
 }
 
 export function activate(context: vscode.ExtensionContext) {
 	const provider = new CompileCommandsTreeDataProvider();
 	vscode.window.registerTreeDataProvider('projectExplorer', provider);
+
+	const collapseAllCommandId = 'compileCommandsExplorer.collapseAll';
+	const collapseAllCommandHandler = () => {
+		provider.collapseAll();
+	};
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(collapseAllCommandId, collapseAllCommandHandler)
+	);
+
+	vscode.window.createTreeView('projectExplorer', {
+		treeDataProvider: provider,
+		showCollapseAll: true,
+	});
 }
 
 // this method is called when your extension is deactivated

@@ -2,7 +2,7 @@
   "name": "vscode-compile-commands-project-view",
   "displayName": "vscode-compile-commands-project-view",
   "description": "",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "engines": {
     "vscode": "^1.65.0"
   },
@@ -12,6 +12,9 @@
   "activationEvents": [
     "onView:compdb"
   ],
+  "author": "zouxiaoliang",
+  "publisher": "zouxiaoliang",
+  "repository": "https://github.com/zouxiaoliang/vscode-compile-commands-project-view.git",
   "main": "./out/extension.js",
   "contributes": {
     "viewsContainers": {
