@@ -54,7 +54,7 @@ class CompileCommandsTreeDataProvider implements vscode.TreeDataProvider<TreeNod
 		this.disposable?.dispose();
 	}
 
-	private refresh() {
+	public refresh() {
 		this.fileTree = [];
 		var dbPath = path.join(this.rootPath ?? "", compileCommandsPath);
 		if (!this._pathExists(dbPath)) {
@@ -146,10 +146,26 @@ class CompileCommandsTreeDataProvider implements vscode.TreeDataProvider<TreeNod
 	}
 
 	getTreeItem(element: TreeNode): vscode.TreeItem {
+		// TODO: 应用图标主题的图标
 		if ('file' === element.type) {
+			let icon: vscode.ThemeIcon;
+			const ext = element.name.split('.').pop();
+			switch (ext) {
+				case '':
+					icon = new vscode.ThemeIcon('file');
+					break;
+				case 'c':
+				case 'cpp':
+				case 'h':
+				case 'hpp':
+					icon = new vscode.ThemeIcon('file-code');
+					break;
+				default:
+					icon = new vscode.ThemeIcon('file');
+			}
 			return {
 				label: `${element.name}`,
-				iconPath: new vscode.ThemeIcon('file'),
+				iconPath: icon,
 				command: {
 					command: OPEN_FILE_COMMAND,
 					title: "Open File",
@@ -179,14 +195,26 @@ export function activate(context: vscode.ExtensionContext) {
 		provider.collapseAll();
 	};
 
+	const refreshCommandId = "compileCommandsExplorer.refresh";
+	const refreshCommandIdHandler = () => {
+		provider.refresh();
+	};
+
 	context.subscriptions.push(
-		vscode.commands.registerCommand(collapseAllCommandId, collapseAllCommandHandler)
+		vscode.commands.registerCommand(collapseAllCommandId, collapseAllCommandHandler),
+		vscode.commands.registerCommand(refreshCommandId, refreshCommandIdHandler)
 	);
 
 	vscode.window.createTreeView('projectExplorer', {
 		treeDataProvider: provider,
 		showCollapseAll: true,
 	});
+
+	const refreshButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+	refreshButton.text = "$(sync) Refresh Compile Commands";
+	refreshButton.command = "compileCommandsExplorer.refresh";
+	refreshButton.show();
+
 }
 
 // this method is called when your extension is deactivated
